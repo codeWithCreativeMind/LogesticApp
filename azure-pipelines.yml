@@ -1,45 +1,54 @@
-# Node.js with React
-# Build a Node.js project that uses React.
-# Add steps that analyze code, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
-
-
 trigger:
-- main
+  branches:
+    include:
+      - Dev
+
+pr:
+  branches:
+    include:
+      - Dev
+
+variables:
+  NODE_OPTIONS: "--max-old-space-size=6000"
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'windows-latest'
 
 steps:
-# Install specific Node.js version
-- task: NodeTool@0
-  inputs:
-    versionSpec: '18.20.0'
-  displayName: 'Install Node.js'
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.11.0'
+    displayName: 'Install Node.js'
 
-# Install backend dependencies
-- script: |
-    echo "Installing Node backend dependencies..."
-    npm install
-  displayName: 'Install Node.js Backend'
+  - powershell: |
+      # npm install -D @craco/craco
+      npm install
+      cd client
+      npm install --legacy-peer-deps
+      npm run build
+    displayName: 'npm install and build client'
 
-# Install and build React frontend
-- script: |
-    echo "Installing and building React frontend..."
-    cd client
-    npm install
-    npm run build
-  displayName: 'Build React Frontend'
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)\client\build'
+      Contents: '**'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\client\build'
+    displayName: 'Copy Client Build'
 
-# Optional: Copy frontend build to backend if you serve via express.static
-# - script: |
-#     echo "Copying frontend build into backend public folder..."
-#     cp -r client/build ./public/
-#   displayName: 'Copy Frontend Build to Public (Optional)'
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)'
+      Contents: |
+        **\*
+        !client\**\*
+        !node_modules\**\*
+        !.git\**\*
+      TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\server'
+    displayName: 'Copy Server Code'
 
-# Archive artifacts (if you need to deploy)
-- task: PublishBuildArtifacts@1
-  inputs:
-    pathToPublish: '$(System.DefaultWorkingDirectory)'
-    artifactName: 'build-output'
-    publishLocation: 'Container'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'drop'
+    condition: succeeded()
+    displayName: 'Publish Artifacts'
