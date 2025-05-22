@@ -11,8 +11,9 @@ pr:
 variables:
   NODE_OPTIONS: "--max-old-space-size=6000"
 
+# Use your self-hosted agent pool
 pool:
-  vmImage: 'windows-latest'
+  name: testPipeline  # This is your custom self-hosted agent pool
 
 steps:
   - task: NodeTool@0
