@@ -11,24 +11,25 @@ pr:
 variables:
   NODE_OPTIONS: "--max-old-space-size=6000"
 
-# Use your self-hosted agent pool
 pool:
-  name: testPipeline  # This is your custom self-hosted agent pool
+  name: testPipeline  # Self-hosted agent pool
 
 steps:
+  # Install Node.js
   - task: NodeTool@0
     inputs:
       versionSpec: '20.11.0'
     displayName: 'Install Node.js'
 
+  # Install dependencies and build client
   - powershell: |
-      # npm install -D @craco/craco
       npm install
       cd client
       npm install --legacy-peer-deps
       npm run build
     displayName: 'npm install and build client'
 
+  # Copy client build output
   - task: CopyFiles@2
     inputs:
       SourceFolder: '$(Build.SourcesDirectory)\client\build'
@@ -36,6 +37,7 @@ steps:
       TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\client\build'
     displayName: 'Copy Client Build'
 
+  # Copy server code excluding client, node_modules, .git
   - task: CopyFiles@2
     inputs:
       SourceFolder: '$(Build.SourcesDirectory)'
@@ -47,6 +49,7 @@ steps:
       TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\server'
     displayName: 'Copy Server Code'
 
+  # Publish artifacts for later use
   - task: PublishBuildArtifacts@1
     inputs:
       PathtoPublish: '$(Build.ArtifactStagingDirectory)'
@@ -54,12 +57,21 @@ steps:
     condition: succeeded()
     displayName: 'Publish Artifacts'
 
-  # Deploy to Windows VM 
+  # Download artifacts to working directory (needed before copying to VM)
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'current'
+      downloadType: 'single'
+      artifactName: 'drop'
+      downloadPath: '$(Pipeline.Workspace)'
+    displayName: 'Download Artifacts'
+
+  # Copy files to Windows VM
   - task: WindowsMachineFileCopy@2
     inputs:
       SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build\*'
-      MachineNames: '172.178.49.66'  # or DNS name
+      MachineNames: '172.178.49.66'
       AdminUserName: 'test-vm1'
-      AdminPassword: 'testPassword@1'  
+      AdminPassword: 'testPassword@1'  # Consider using secret variable instead
       TargetPath: 'C:\aerospace-digitalization-cicd'
     displayName: 'Copy Artifacts to VM'
