@@ -1,21 +1,96 @@
-# Node.js with React
-# Build a Node.js project that uses React.
-# Add steps that analyze code, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
-
 trigger:
-- main
+  branches:
+    include:
+      - Dev
+
+pr:
+  branches:
+    include:
+      - Dev
+
+variables:
+  NODE_OPTIONS: "--max-old-space-size=6000"
 
 pool:
-  vmImage: ubuntu-latest
+  name: testPipeline  # Use your self-hosted agent pool
 
 steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '20.x'
-  displayName: 'Install Node.js'
+  # Step 1: Install Node.js
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.11.0'
+    displayName: 'Install Node.js'
 
-- script: |
-    npm install
-    npm run build
-  displayName: 'npm install and build'
+  # Step 2: Build React Client
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        npm install
+        cd client
+        npm install --legacy-peer-deps
+        npm run build
+    displayName: 'Build React Client'
+
+  # Step 3: Copy client build output to staging
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)\client\build'
+      Contents: '**'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\client\build'
+    displayName: 'Stage Client Build'
+
+  # Step 4: Copy server code to staging (excluding client/node_modules/.git)
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)'
+      Contents: |
+        **\*
+        !client\**\*
+        !node_modules\**\*
+        !.git\**\*
+      TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\server'
+    displayName: 'Stage Server Code'
+
+  # Step 5: Publish artifacts
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'drop'
+    displayName: 'Publish Artifacts'
+
+  # Step 6: Download artifacts for deployment
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'current'
+      downloadType: 'single'
+      artifactName: 'drop'
+      downloadPath: '$(Pipeline.Workspace)'
+    displayName: 'Download Artifacts'
+
+  # Step 7: Debug - List downloaded files
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        Write-Host "📁 Listing contents of $(Pipeline.Workspace)\drop\usa-dev\client\build"
+        Get-ChildItem -Recurse "$(Pipeline.Workspace)\drop\usa-dev\client\build"
+    displayName: 'Debug: List Client Build Files'
+
+  # Step 8: Copy artifacts to VM using WinRM (PowerShell Remoting)
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        $user = "$(vmUser)"
+        $pass = ConvertTo-SecureString "$(vmPassword)" -AsPlainText -Force
+        $cred = New-Object System.Management.Automation.PSCredential ($user, $pass)
+
+        $session = New-PSSession -ComputerName 172.178.49.66 -Credential $cred
+
+        Copy-Item -Path "$(Pipeline.Workspace)\drop\usa-dev\client\build\*" `
+                  -Destination "C:\aerospace-digitalization-cicd" `
+                  -ToSession $session -Recurse -Force
+
+        Write-Host "✅ Artifacts copied successfully to VM via PowerShell Remoting"
+    displayName: 'Deploy to VM via PowerShell Remoting'
