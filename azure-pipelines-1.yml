@@ -53,3 +53,13 @@ steps:
       ArtifactName: 'drop'
     condition: succeeded()
     displayName: 'Publish Artifacts'
+
+  # Deploy to Windows VM 
+  - task: WindowsMachineFileCopy@2
+    inputs:
+      SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build\*'
+      MachineNames: '172.178.49.66'  # or DNS name
+      AdminUserName: 'test-vm1'
+      AdminPassword: 'testPassword@1'  
+      TargetPath: 'C:\aerospace-digitalization-cicd'
+    displayName: 'Copy Artifacts to VM'
