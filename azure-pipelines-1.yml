@@ -12,24 +12,24 @@ variables:
   NODE_OPTIONS: "--max-old-space-size=6000"
 
 pool:
-  name: testPipeline  # Self-hosted agent pool
+  name: testPipeline  # Your self-hosted agent pool
 
 steps:
-  # Install Node.js
+  # Step 1: Install Node.js
   - task: NodeTool@0
     inputs:
       versionSpec: '20.11.0'
     displayName: 'Install Node.js'
 
-  # Install dependencies and build client
+  # Step 2: Install and Build React Client
   - powershell: |
       npm install
       cd client
       npm install --legacy-peer-deps
       npm run build
-    displayName: 'npm install and build client'
+    displayName: 'Build React Client'
 
-  # Copy client build output
+  # Step 3: Copy client build to staging
   - task: CopyFiles@2
     inputs:
       SourceFolder: '$(Build.SourcesDirectory)\client\build'
@@ -37,7 +37,7 @@ steps:
       TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\client\build'
     displayName: 'Copy Client Build'
 
-  # Copy server code excluding client, node_modules, .git
+  # Step 4: Copy server code
   - task: CopyFiles@2
     inputs:
       SourceFolder: '$(Build.SourcesDirectory)'
@@ -49,15 +49,14 @@ steps:
       TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\server'
     displayName: 'Copy Server Code'
 
-  # Publish artifacts for later use
+  # Step 5: Publish artifacts
   - task: PublishBuildArtifacts@1
     inputs:
       PathtoPublish: '$(Build.ArtifactStagingDirectory)'
       ArtifactName: 'drop'
-    condition: succeeded()
     displayName: 'Publish Artifacts'
 
-  # Download artifacts to working directory (needed before copying to VM)
+  # Step 6: Download artifacts
   - task: DownloadBuildArtifacts@0
     inputs:
       buildType: 'current'
@@ -66,12 +65,18 @@ steps:
       downloadPath: '$(Pipeline.Workspace)'
     displayName: 'Download Artifacts'
 
-  # Copy files to Windows VM
+  # ✅ Step 7: Debug - List the files to ensure path is correct
+  - powershell: |
+      Write-Host "Checking contents of $(Pipeline.Workspace)\drop\usa-dev\client\build"
+      Get-ChildItem -Recurse "$(Pipeline.Workspace)\drop\usa-dev\client\build"
+    displayName: 'Debug: List Client Build Files'
+
+  # Step 8: Copy to Windows VM
   - task: WindowsMachineFileCopy@2
     inputs:
       SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build\*'
       MachineNames: '172.178.49.66'
       AdminUserName: 'test-vm1'
-      AdminPassword: 'testPassword@1'  # Consider using secret variable instead
+      AdminPassword: '$(vmPassword)'  # Use secure variable
       TargetPath: 'C:\aerospace-digitalization-cicd'
     displayName: 'Copy Artifacts to VM'
