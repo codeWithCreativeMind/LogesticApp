@@ -74,7 +74,7 @@ steps:
   # Step 8: Copy to Windows VM
   - task: WindowsMachineFileCopy@2
     inputs:
-      SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build\*'
+      SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build'
       MachineNames: '172.178.49.66'
       AdminUserName: 'test-vm1'
       AdminPassword: '$(vmPassword)'  # Use secure variable
