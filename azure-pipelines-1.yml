@@ -77,6 +77,6 @@ steps:
       SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build'
       MachineNames: '172.178.49.66'
       AdminUserName: 'test-vm1'
-      AdminPassword: '$(vmPassword)'  # Use secure variable
+      AdminPassword: 'testPassword@1'  # Use secure variable
       TargetPath: 'C:\aerospace-digitalization-cicd'
     displayName: 'Copy Artifacts to VM'
