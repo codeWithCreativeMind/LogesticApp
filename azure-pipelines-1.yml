@@ -12,7 +12,7 @@ variables:
   NODE_OPTIONS: "--max-old-space-size=6000"
 
 pool:
-  name: testPipeline  # Your self-hosted agent pool
+  name: testPipeline  # Use your self-hosted agent pool
 
 steps:
   # Step 1: Install Node.js
@@ -21,23 +21,26 @@ steps:
       versionSpec: '20.11.0'
     displayName: 'Install Node.js'
 
-  # Step 2: Install and Build React Client
-  - powershell: |
-      npm install
-      cd client
-      npm install --legacy-peer-deps
-      npm run build
+  # Step 2: Build React Client
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        npm install
+        cd client
+        npm install --legacy-peer-deps
+        npm run build
     displayName: 'Build React Client'
 
-  # Step 3: Copy client build to staging
+  # Step 3: Copy client build output to staging
   - task: CopyFiles@2
     inputs:
       SourceFolder: '$(Build.SourcesDirectory)\client\build'
       Contents: '**'
       TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\client\build'
-    displayName: 'Copy Client Build'
+    displayName: 'Stage Client Build'
 
-  # Step 4: Copy server code
+  # Step 4: Copy server code to staging (excluding client/node_modules/.git)
   - task: CopyFiles@2
     inputs:
       SourceFolder: '$(Build.SourcesDirectory)'
@@ -47,7 +50,7 @@ steps:
         !node_modules\**\*
         !.git\**\*
       TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\server'
-    displayName: 'Copy Server Code'
+    displayName: 'Stage Server Code'
 
   # Step 5: Publish artifacts
   - task: PublishBuildArtifacts@1
@@ -56,7 +59,7 @@ steps:
       ArtifactName: 'drop'
     displayName: 'Publish Artifacts'
 
-  # Step 6: Download artifacts
+  # Step 6: Download artifacts for deployment
   - task: DownloadBuildArtifacts@0
     inputs:
       buildType: 'current'
@@ -65,18 +68,29 @@ steps:
       downloadPath: '$(Pipeline.Workspace)'
     displayName: 'Download Artifacts'
 
-  # ✅ Step 7: Debug - List the files to ensure path is correct
-  - powershell: |
-      Write-Host "Checking contents of $(Pipeline.Workspace)\drop\usa-dev\client\build"
-      Get-ChildItem -Recurse "$(Pipeline.Workspace)\drop\usa-dev\client\build"
+  # Step 7: Debug - List downloaded files
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        Write-Host "📁 Listing contents of $(Pipeline.Workspace)\drop\usa-dev\client\build"
+        Get-ChildItem -Recurse "$(Pipeline.Workspace)\drop\usa-dev\client\build"
     displayName: 'Debug: List Client Build Files'
 
-  # Step 8: Copy to Windows VM
-  - task: WindowsMachineFileCopy@2
+  # Step 8: Copy artifacts to VM using WinRM (PowerShell Remoting)
+  - task: PowerShell@2
     inputs:
-      SourcePath: '$(Pipeline.Workspace)\drop\usa-dev\client\build'
-      MachineNames: '172.178.49.66'
-      AdminUserName: 'test-vm1'
-      AdminPassword: 'testPassword@1'  # Use secure variable
-      TargetPath: '\\172.178.49.66\deploy'
-    displayName: 'Copy Artifacts to VM'
+      targetType: 'inline'
+      script: |
+        $user = "$(vmUser)"
+        $pass = ConvertTo-SecureString "$(vmPassword)" -AsPlainText -Force
+        $cred = New-Object System.Management.Automation.PSCredential ($user, $pass)
+
+        $session = New-PSSession -ComputerName 172.178.49.66 -Credential $cred
+
+        Copy-Item -Path "$(Pipeline.Workspace)\drop\usa-dev\client\build\*" `
+                  -Destination "C:\aerospace-digitalization-cicd" `
+                  -ToSession $session -Recurse -Force
+
+        Write-Host "✅ Artifacts copied successfully to VM via PowerShell Remoting"
+    displayName: 'Deploy to VM via PowerShell Remoting'
