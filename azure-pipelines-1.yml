@@ -78,5 +78,5 @@ steps:
       MachineNames: '172.178.49.66'
       AdminUserName: 'test-vm1'
       AdminPassword: 'testPassword@1'  # Use secure variable
-      TargetPath: 'C:\aerospace-digitalization-cicd'
+      TargetPath: '\\172.178.49.66\deploy'
     displayName: 'Copy Artifacts to VM'
