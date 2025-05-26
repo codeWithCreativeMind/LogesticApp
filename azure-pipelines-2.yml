@@ -1,0 +1,53 @@
+trigger:
+  branches:
+    include:
+      - Dev
+
+pr:
+  branches:
+    include:
+      - Dev
+
+variables:
+  NODE_OPTIONS: "--max-old-space-size=6000"
+
+pool:
+  vmImage: 'windows-latest'
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.11.0'
+    displayName: 'Install Node.js'
+
+  - powershell: |
+      npm install -D @craco/craco
+      cd client
+      npm install --legacy-peer-deps
+      npm run build
+    displayName: 'npm install and build client'
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)\client\build'
+      Contents: '**'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\client\build'
+    displayName: 'Copy Client Build'
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)'
+      Contents: |
+        **\*
+        !client\**\*
+        !node_modules\**\*
+        !.git\**\*
+      TargetFolder: '$(Build.ArtifactStagingDirectory)\usa-dev\server'
+    displayName: 'Copy Server Code'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'drop'
+    condition: succeeded()
+    displayName: 'Publish Artifacts'
