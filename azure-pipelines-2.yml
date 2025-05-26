@@ -12,7 +12,7 @@ variables:
   NODE_OPTIONS: "--max-old-space-size=6000"
 
 pool:
-  vmImage: 'windows-latest'
+  name: testPipeline
 
 steps:
   - task: NodeTool@0
